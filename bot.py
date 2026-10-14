@@ -207,10 +207,76 @@ def run_debate_council(market_data, tech_indicators):
 
     print("🤖 [1/3] DeepSeek gốc đang lên phương án chiến lược...")
     proposal_1 = call_deepseek_native(f"Dữ liệu thị trường tháng 10/2026:\n{data_summary}\n\nBạn là Chuyên gia Thực chiến. Đề xuất tỷ lệ Bán tiền tươi (Spot), Bán giao xa (Forward) và Giữ lại kho (100-500 tấn) bám sát bối cảnh thị trường hiện tại.")
-    print(f"\n======== [DEEPSEEK PROPOSAL] ========\n{proposal_1}\n=====================================\n")
 
     print("🛡️ [2/3] Llama 3.3 đang soi rủi ro và phản biện...")
     critique_2 = call_openrouter_paid("meta-llama/llama-3.3-70b-instruct", f"Dữ liệu:\n{data_summary}\n\nĐề xuất của DeepSeek:\n{proposal_1}\n\nBạn là Sĩ quan Quản trị Rủi ro. Vạch rõ điểm yếu kỹ thuật MA20/RSI, thách thức nguồn cung hiện tại và thắt chặt vạch đỏ cắt lỗ.")
-    print(f"\n======== [LLAMA CRITIQUE] ========\n{critique_2}\n===================================\n")
 
-    print("🏛️ [3/3] Gemini Flash ch
+    print("🏛️ [3/3] Gemini Flash chốt phán quyết chung cuộc...")
+    final_report = call_openrouter_paid("google/gemini-2.5-flash", f"""
+    HÔM NAY LÀ: {current_date_str}
+    DỮ LIỆU THỊ TRƯỜNG: {data_summary}
+    ĐỀ XUẤT THỰC CHIẾN (DEEPSEEK): {proposal_1}
+    PHẢN BIỆN RỦI RO (LLAMA): {critique_2}
+
+    Bạn là Chủ tịch Hội đồng Chiến lược Kho hàng Đắk Lắk. Hãy tổng hợp cuộc tranh luận trên thành BẢN LỆNH GIAO DỊCH SÚC TÍCH, SẮC LẠNH, chuẩn hóa theo thời điểm tháng 10/2026:
+
+    🌍 **1. THẾ TRẬN THỊ TRƯỜNG ({current_date_str})**
+    - Vĩ mô & Nguồn cung: [Đánh giá thực tế tháng 10/2026]
+    - Kỹ thuật & Tâm lý Đắk Lắk: [Tổng hợp RSI/MA20 và giá xô nội địa]
+
+    💼 **2. KẾ HOẠCH DÒNG TIỀN (Kho 100-500 tấn)**
+    - **SPOT (Tiền tươi)**: [%] — [Khối lượng & lý do]
+    - **FORWARD (Giao xa)**: [%] — [Khối lượng & kỳ hạn]
+    - **GIỮ KHO**: [%] — [Khối lượng & chiến thuật phòng thủ]
+
+    🛡️ **3. VẠCH ĐỎ AN TOÀN**
+    - **Cắt lỗ khi**: [Ngưỡng giá London/RSI cụ thể]
+    - **Chốt lời tiếp**: [Mức giá mục tiêu tiếp theo]
+
+    📌 **4. LỆNH ĐIỀU HÀNH CHỦ ĐẠO**
+    [Một câu hành động dứt khoát nhất cho chủ kho]
+    """)
+    return final_report
+
+# ==========================================
+# 5. GỬI TELEGRAM
+# ==========================================
+def send_telegram_report(photo_path, report_text):
+    token, chat_id = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        print("⚠️ Thiếu cấu hình Telegram Token hoặc Chat ID")
+        return
+
+    if photo_path and os.path.exists(photo_path):
+        requests.post(
+            f"https://api.telegram.org/bot{token}/sendPhoto",
+            data={'chat_id': chat_id, 'caption': "🌐 **BIỂU ĐỒ KỸ THUẬT & DÒNG TIỀN (THÁNG 10/2026)**", 'parse_mode': 'Markdown'},
+            files={'photo': open(photo_path, 'rb')},
+            timeout=20
+        )
+
+    requests.post(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        json={'chat_id': chat_id, 'text': f"🏛️ **BÁO CÁO HỘI ĐỒNG CHIẾN LƯỢC**\n\n{report_text}", 'parse_mode': 'Markdown'},
+        timeout=10
+    )
+
+if __name__ == "__main__":
+    print("🔄 Thu thập dữ liệu thị trường tháng 10/2026...")
+    market_data = {
+        "london": CoffeeDataCollector.get_london_robusta(),
+        "arabica": CoffeeDataCollector.get_brazil_arabica(),
+        "domestic": CoffeeDataCollector.get_vietnam_domestic_prices(),
+        "weather": CoffeeDataCollector.get_daklak_weather()
+    }
+    
+    print("📈 Vẽ biểu đồ kỹ thuật...")
+    chart_file, _, ma20_val, rsi_val = generate_technical_chart(market_data['london']['price'])
+    tech_indicators = {"ma20": ma20_val, "rsi": rsi_val}
+    
+    print("🏛️ Khởi động Hội đồng AI tranh biện...")
+    final_decision = run_debate_council(market_data, tech_indicators)
+    
+    print("🚀 Gửi báo cáo về Telegram...")
+    send_telegram_report(chart_file, final_decision)
+    print("✅ Hoàn tất chu trình tự động!")
