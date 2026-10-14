@@ -30,13 +30,14 @@ def agent_deepseek():
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=15)
         data = res.json()
-        # Đã thêm [0] để trỏ chính xác vào phần tử list của choices
-        return data['choices'][0]['message']['content']
+        if 'choices' in data:
+            return data['choices'][0]['message']['content']
+        return f"DeepSeek phản hồi lạ: {str(data)[:80]}"
     except Exception as e:
         return f"DeepSeek bận: {str(e)}"
 
 def agent_openrouter():
-    """Agent 2: Chuyên gia Vĩ mô & Tin tức"""
+    """Agent 2: Chuyên gia Vĩ mô & Tin tức (OpenRouter)"""
     if not OPENROUTER_API_KEY: 
         return "⚠️ Chưa cấu hình OpenRouter API Key."
     
@@ -54,7 +55,11 @@ def agent_openrouter():
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=15)
         data = res.json()
-        return data['choices'][0]['message']['content']
+        if 'choices' in data:
+            return data['choices'][0]['message']['content']
+        elif 'error' in data:
+            return f"OpenRouter đang quá tải (Free model limit): {data['error'].get('message', 'Bận')}"
+        return f"OpenRouter phản hồi lạ: {str(data)[:80]}"
     except Exception as e:
         return f"OpenRouter bận: {str(e)}"
 
@@ -77,10 +82,12 @@ def agent_gemini(tech, macro):
         data = res.json()
         candidates = data.get('candidates')
         if candidates:
-            return candidates[0].get('content', {}).get('parts', [{}])[0].get('text', 'Không có nội dung.')
+            parts = candidates[0].get('content', {}).get('parts', [])
+            if parts:
+                return parts[0].get('text', 'Không có nội dung.')
+        return f"Gemini phản hồi lạ: {str(data)[:80]}"
     except Exception as e:
         return f"Gemini bận: {str(e)}"
-    return "Gemini gặp sự cố tổng hợp."
 
 if __name__ == "__main__":
     t_insight = agent_deepseek()
@@ -93,4 +100,4 @@ if __name__ == "__main__":
     msg += f"🧠 **Gemini (Chief Strategy):**\n{final_verdict}"
     
     send_telegram(msg)
-    print("Multi-Agent 3 mảnh đã chạy xong!")
+    print("Multi-Agent 3 mảnh đã chạy xong và bọc phòng thủ thành công!")
