@@ -1,9 +1,10 @@
 import os
 import requests
+from datetime import datetime
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY") # Thay thế OpenRouter bằng Groq cực kỳ ổn định
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
@@ -15,89 +16,106 @@ def send_telegram(message):
     except Exception as e:
         print(f"Lỗi gửi Telegram: {e}")
 
-def agent_deepseek():
-    """Agent 1: Chuyên gia Phân tích Kỹ thuật & Định lượng"""
-    if not DEEPSEEK_API_KEY: 
-        return "⚠️ Chưa cấu hình DeepSeek API Key."
-    
+def fetch_chart_data():
+    """Cào dữ liệu biểu đồ và tính toán MA5, MA20"""
+    try:
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/RM=F?interval=1d&range=1mo"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        res = requests.get(url, headers=headers, timeout=10)
+        data = res.json()['chart']['result'][0]
+        
+        timestamps = data['timestamp']
+        quotes = data['indicators']['quote'][0]
+        closes = quotes['close']
+        highs = quotes['high']
+        lows = quotes['low']
+        
+        history = []
+        for t, c, h, l in zip(timestamps, closes, highs, lows):
+            if c is not None and h is not None and l is not None:
+                dt = datetime.fromtimestamp(t).strftime('%d/%m')
+                history.append({"date": dt, "close": round(c, 1), "high": round(h, 1), "low": round(l, 1)})
+        
+        if len(history) < 5: return None
+        
+        latest = history[-1]
+        prev = history[-2]
+        change_pct = round(((latest['close'] - prev['close']) / prev['close']) * 100, 2)
+        
+        recent_closes = [x['close'] for x in history]
+        ma5 = round(sum(recent_closes[-5:]) / 5, 1)
+        ma20 = round(sum(recent_closes[-20:]) / min(20, len(recent_closes)), 1)
+
+        return {
+            "latest_price": latest['close'],
+            "change_pct": change_pct,
+            "high": latest['high'],
+            "low": latest['low'],
+            "ma5": ma5,
+            "ma20": ma20,
+            "history_str": "\n".join([f"- Ngày {x['date']}: {x['close']} USD" for x in history[-5:]])
+        }
+    except Exception as e:
+        return None
+
+def agent_deepseek(data):
+    """Agent 1: DeepSeek phân tích kỹ thuật"""
+    if not DEEPSEEK_API_KEY: return "Chưa có DeepSeek Key."
     url = "https://api.deepseek.com/chat/completions"
     headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+    prompt = f"Giá Robusta: {data['latest_price']} USD ({data['change_pct']}%). MA5: {data['ma5']}, MA20: {data['ma20']}. Đánh giá xu hướng và vùng cản ngắn hạn dưới 70 từ."
+    payload = {"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "stream": False}
+    try:
+        res = requests.post(url, json=payload, headers=headers, timeout=15)
+        return res.json()['choices'][0]['message']['content']
+    except Exception as e:
+        return f"DeepSeek bận: {e}"
+
+def agent_groq(data):
+    """Agent 2: Groq siêu tốc đánh giá tâm lý vĩ mô"""
+    if not GROQ_API_KEY: return "Chưa có Groq Key."
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {
-        "model": "deepseek-chat",
-        "messages": [{"role": "user", "content": "Đánh giá ngắn xu hướng kỹ thuật giá Robusta London, nêu nhanh vùng cản dưới 50 từ."}],
+        "model": "llama-3.1-8b-instant",
+        "messages": [{"role": "user", "content": "Góc nhìn nhanh về áp lực nguồn cung cà phê Tây Nguyên lúc này dưới 50 từ."}],
         "stream": False
     }
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=15)
-        data = res.json()
-        if 'choices' in data:
-            return data['choices'][0]['message']['content']
-        return f"DeepSeek phản hồi lạ: {str(data)[:80]}"
+        return res.json()['choices'][0]['message']['content']
     except Exception as e:
-        return f"DeepSeek bận: {str(e)}"
+        return f"Groq bận: {e}"
 
-def agent_openrouter():
-    """Agent 2: Chuyên gia Vĩ mô & Tin tức (OpenRouter)"""
-    if not OPENROUTER_API_KEY: 
-        return "⚠️ Chưa cấu hình OpenRouter API Key."
-    
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "HTTP-Referer": "https://github.com/robusta-agent",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": "google/gemma-2-9b-it:free",
-        "messages": [{"role": "user", "content": "Góc nhìn nhanh về nguồn cung và tâm lý thị trường cà phê Tây Nguyên lúc này dưới 50 từ."}],
-        "stream": False
-    }
-    try:
-        res = requests.post(url, json=payload, headers=headers, timeout=15)
-        data = res.json()
-        if 'choices' in data:
-            return data['choices'][0]['message']['content']
-        elif 'error' in data:
-            return f"OpenRouter đang quá tải (Free model limit): {data['error'].get('message', 'Bận')}"
-        return f"OpenRouter phản hồi lạ: {str(data)[:80]}"
-    except Exception as e:
-        return f"OpenRouter bận: {str(e)}"
-
-def agent_gemini(tech, macro):
-    """Agent 3: Trưởng ban Chiến lược tổng hợp ra quyết định"""
-    if not GEMINI_API_KEY: 
-        return f"Kỹ thuật: {tech}\nVĩ mô: {macro}"
-    
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-    prompt = f"""
-    Tổng hợp báo cáo từ 2 chuyên gia:
-    1. Kỹ thuật (DeepSeek): {tech}
-    2. Vĩ mô (OpenRouter): {macro}
-
-    Hãy đưa ra lời khuyên hành động quyết đoán cuối cùng cho thương lái (GIỮ HÀNG hay BÁN TỪNG PHẦN). Ngắn gọn, sắc bén dưới 100 từ, định dạng Markdown.
-    """
+def agent_gemini(data, tech, macro):
+    """Agent 3: Gemini chốt hạ chiến lược (Đã cập nhật model gemini-2.0-flash chuẩn)"""
+    if not GEMINI_API_KEY: return f"Kỹ thuật: {tech}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    prompt = f"Giá: {data['latest_price']} USD. Kỹ thuật: {tech}\nVĩ mô: {macro}\nKhuyên thương lái GIỮ HÀNG hay BÁN TỪNG PHẦN? Dưới 60 từ, Markdown."
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     try:
         res = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=15)
-        data = res.json()
-        candidates = data.get('candidates')
+        candidates = res.json().get('candidates')
         if candidates:
-            parts = candidates[0].get('content', {}).get('parts', [])
-            if parts:
-                return parts[0].get('text', 'Không có nội dung.')
-        return f"Gemini phản hồi lạ: {str(data)[:80]}"
+            return candidates[0]['content']['parts'][0]['text']
+        return "Gemini bận."
     except Exception as e:
-        return f"Gemini bận: {str(e)}"
+        return f"Gemini bận: {e}"
 
 if __name__ == "__main__":
-    t_insight = agent_deepseek()
-    m_insight = agent_openrouter()
-    final_verdict = agent_gemini(t_insight, m_insight)
-    
-    msg = "🌐 **HỘI ĐỒNG 3 AI AGENT (ROBUSTA)**\n\n"
-    msg += f"📊 **DeepSeek (Technical):**\n{t_insight}\n\n"
-    msg += f"🌍 **OpenRouter (Macro):**\n{m_insight}\n\n"
-    msg += f"🧠 **Gemini (Chief Strategy):**\n{final_verdict}"
-    
-    send_telegram(msg)
-    print("Multi-Agent 3 mảnh đã chạy xong và bọc phòng thủ thành công!")
+    chart = fetch_chart_data()
+    if chart:
+        t_insight = agent_deepseek(chart)
+        g_insight = agent_groq(chart)
+        final_verdict = agent_gemini(chart, t_insight, g_insight)
+        
+        msg = f"📊 **HỘI ĐỒNG AI (DEEPSEEK + GROQ + GEMINI)**\n"
+        msg += f"• Giá Sàn London: **{chart['latest_price']} USD** ({chart['change_pct']}%)\n\n"
+        msg += f"📈 **DeepSeek (Technical):**\n{t_insight}\n\n"
+        msg += f"⚡ **Groq (Macro/Speed):**\n{g_insight}\n\n"
+        msg += f"🧠 **Gemini (Strategy Verdict):**\n{final_verdict}"
+        
+        send_telegram(msg)
+        print("Đã hoàn thành vòng lặp Multi-Agent tối ưu!")
+    else:
+        send_telegram("⚠️ Lỗi kết nối dữ liệu biểu đồ.")
