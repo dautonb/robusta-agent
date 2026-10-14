@@ -15,7 +15,6 @@ def send_telegram(message):
         print(f"Lỗi gửi Telegram: {e}")
 
 def get_market_data():
-    """Lấy dữ liệu giá Robusta London (có fallback dự phòng chuẩn xác)"""
     try:
         url = "https://query1.finance.yahoo.com/v8/finance/chart/RM=F?interval=1d&range=5d"
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -29,12 +28,9 @@ def get_market_data():
             return {"price": latest, "change": change, "source": "Yahoo Finance (Live)"}
     except Exception:
         pass
-    
-    # Dự phòng an toàn tuyệt đối nếu mạng cloud bị chặn
     return {"price": 4215, "change": 0.45, "source": "Thị trường London & Tây Nguyên (Dự phòng chuẩn)"}
 
 def agent_deepseek(data):
-    """Chuyên gia Phân tích Kỹ thuật (DeepSeek)"""
     if not DEEPSEEK_API_KEY:
         return "⚠️ Chưa cấu hình DeepSeek API Key."
     url = "https://api.deepseek.com/chat/completions"
@@ -51,10 +47,10 @@ def agent_deepseek(data):
     return "DeepSeek không phản hồi."
 
 def agent_gemini(data, tech_insight):
-    """Trưởng ban Chiến lược (Gemini)"""
     if not GEMINI_API_KEY:
         return f"Kỹ thuật: {tech_insight}"
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    # Đã cập nhật sang model gemini-1.5-flash ổn định
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     prompt = f"""
     Dữ liệu giá: {data['price']} USD ({data['change']}%).
     Phân tích kỹ thuật (DeepSeek): {tech_insight}
