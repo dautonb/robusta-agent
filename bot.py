@@ -39,12 +39,15 @@ def agent_deepseek(data):
     payload = {"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "stream": False}
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=15)
-        return res.json()['choices'][0]['message']['content']
+        res_json = res.json()
+        if 'choices' in res_json:
+            return res_json['choices'][0]['message']['content']
+        return f"DeepSeek phản hồi lạ: {str(res_json)[:80]}"
     except Exception as e:
         return f"DeepSeek bận: {e}"
 
 def agent_groq(data, tech_insight):
-    """Agent 2: Tổng hợp chiến lược và tâm lý vĩ mô"""
+    """Agent 2: Tổng hợp chiến lược và tâm lý vĩ mô (Đã bọc khiên bảo vệ)"""
     if not GROQ_API_KEY: return "⚠️ Thiếu Groq Key."
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
@@ -56,13 +59,20 @@ def agent_groq(data, tech_insight):
     Với tư cách là Trưởng ban chiến lược thương lái, hãy đưa ra quyết định hành động tối ưu (GIỮ HÀNG hay BÁN TỪNG PHẦN) dưới 60 từ, sắc bén, định dạng Markdown.
     """
     payload = {
-        "model": "llama-3.3-70b-versatile", # Model siêu thông minh và ổn định trên Groq
+        "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
         "stream": False
     }
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=15)
-        return res.json()['choices'][0]['message']['content']
+        res_json = res.json()
+        
+        # Khiên phòng thủ kiểm tra lỗi trả về
+        if 'choices' in res_json:
+            return res_json['choices'][0]['message']['content']
+        elif 'error' in res_json:
+            return f"Groq quá tải/lỗi: {res_json['error'].get('message', 'Bận')}"
+        return f"Groq phản hồi lạ: {str(res_json)[:80]}"
     except Exception as e:
         return f"Groq bận: {e}"
 
@@ -77,4 +87,4 @@ if __name__ == "__main__":
     msg += f"🧠 **Groq / Llama-3.3 (Chief Strategist):**\n{strategy}"
     
     send_telegram(msg)
-    print("Hội đồng đa mô hình đã chốt hạ thành công!")
+    print("Hội đồng đa mô hình đã chạy mượt mà!")
