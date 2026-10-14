@@ -1,87 +1,129 @@
 import os
 import requests
+from bs4 import BeautifulSoup
 
-CONFIG = {
-    "DEEPSEEK_API_KEY": os.environ.get("DEEPSEEK_API_KEY"),
-    "TELEGRAM_BOT_TOKEN": os.environ.get("TELEGRAM_BOT_TOKEN"),
-    "TELEGRAM_CHAT_ID": os.environ.get("TELEGRAM_CHAT_ID")
-}
-
-def send_telegram(message):
-    try:
-        url = f"https://api.telegram.org/bot{CONFIG['TELEGRAM_BOT_TOKEN']}/sendMessage"
-        payload = {"chat_id": CONFIG['TELEGRAM_CHAT_ID'], "text": message, "parse_mode": "Markdown"}
-        requests.post(url, json=payload, timeout=10)
-    except Exception as e:
-        print(f"Lỗi gửi Telegram: {e}")
-
-def call_deepseek(prompt):
-    if not CONFIG["DEEPSEEK_API_KEY"]: return "⚠️ Thiếu DeepSeek Key."
-    url = "https://api.deepseek.com/chat/completions"
-    headers = {"Authorization": f"Bearer {CONFIG['DEEPSEEK_API_KEY']}", "Content-Type": "application/json"}
-    payload = {"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "stream": False}
-    try:
-        res = requests.post(url, json=payload, headers=headers, timeout=15).json()
-        if 'choices' in res:
-            return res['choices'][0]['message']['content']
-        return "DeepSeek bận."
-    except Exception as e:
-        return f"Lỗi kết nối: {e}"
-
-class MarketDataAgent:
+# ==========================================
+# 1. BỘ THU THẬP DỮ LIỆU ĐA NGUỒN (COLLECTOR)
+# ==========================================
+class CoffeeDataCollector:
+    
     @staticmethod
-    def fetch():
+    def get_daklak_weather():
+        """Lấy dữ liệu thời tiết thực tế Buôn Ma Thuột qua Open-Meteo API"""
         try:
-            url = "https://query1.finance.yahoo.com/v8/finance/chart/RM=F?interval=1d&range=1mo"
-            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-            closes = [c for c in res.json()['chart']['result'][0]['indicators']['quote'][0]['close'] if c is not None]
-            
-            if len(closes) >= 14:
-                latest, prev = round(closes[-1]), round(closes[-2])
-                change = round(((latest - prev) / prev) * 100, 2)
-                ma5 = round(sum(closes[-5:]) / 5)
-                ma20 = round(sum(closes[-20:]) / min(20, len(closes)))
-                
-                gains, losses = [], []
-                for i in range(-14, 0):
-                    diff = closes[i] - closes[i-1]
-                    gains.append(diff if diff > 0 else 0)
-                    losses.append(abs(diff) if diff < 0 else 0)
-                rs = (sum(gains) / 14) / (sum(losses) / 14) if sum(losses) != 0 else 100
-                rsi = round(100 - (100 / (1 + rs)), 1)
-
-                return {"price": latest, "change": change, "ma5": ma5, "ma20": ma20, "rsi": rsi, "source": "Yahoo Finance (Live)"}
+            url = "https://api.open-meteo.com/v1/forecast?latitude=12.67&longitude=108.03&current=temperature_2m,relative_humidity_2m,precipitation"
+            res = requests.get(url, timeout=10).json()
+            current = res.get('current', {})
+            return {
+                "temp": current.get('temperature_2m', 'N/A'),
+                "humidity": current.get('relative_humidity_2m', 'N/A'),
+                "rain": current.get('precipitation', 0)
+            }
         except Exception:
-            pass
-        return {"price": 3450, "change": 0.2, "ma5": 3440, "ma20": 3480, "rsi": 49.0, "source": "Dự phòng tiêu chuẩn"}
+            return {"temp": "N/A", "humidity": "N/A", "rain": 0}
 
-class CommercialStrategyAgent:
     @staticmethod
-    def analyze(data):
-        prompt = f"""
-        Dữ liệu thị trường Robusta London:
-        - Giá hiện tại: {data['price']} USD/tấn ({data['change']}%)
-        - MA5: {data['ma5']} | MA20: {data['ma20']} | RSI: {data['rsi']}
-        
-        Đối tượng phân tích: Chủ kho hàng lớn (quy mô 100-500 tấn tại Tây Nguyên) đang đứng trước lựa chọn: BÁN GIAO NGAY (Spot) hay CHỐT HỢP ĐỒNG KỲ HẠN (Forward).
-        
-        Hãy đưa ra phân tích sắc bén, chuyên nghiệp gồm 3 ý ngắn gọn:
-        1. **Trạng thái kỹ thuật ngắn hạn:** Đánh giá động lượng và rủi ro điều chỉnh.
-        2. **Quyết định Giao ngay (Spot):** Có nên xả bớt hàng ngay vùng giá này để bảo toàn dòng tiền hay giữ lại?
-        3. **Quyết định Kỳ hạn (Forward):** Chiến lược khóa giá tương lai hoặc phòng hộ rủi ro (Hedging) lúc này nên cấu trúc thế nào?
-        
-        Trình bày cực kỳ súc tích, chuyên nghiệp, định dạng Markdown, dưới 100 từ.
-        """
-        return call_deepseek(prompt)
+    def get_london_robusta():
+        """Lấy giá sàn ICE London (RM=F)"""
+        try:
+            url = "https://query1.finance.yahoo.com/v8/finance/chart/RM=F?interval=1d&range=1d"
+            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10).json()
+            meta = res['chart']['result'][0]['meta']
+            price = meta.get('regularMarketPrice', 0)
+            prev_close = meta.get('previousClose', price)
+            change_pct = round(((price - prev_close) / prev_close) * 100, 2) if prev_close else 0.0
+            return {"price": price, "change": change_pct}
+        except Exception:
+            return {"price": 0, "change": 0.0}
 
+    @staticmethod
+    def get_vietnam_domestic_prices():
+        """Cào giá xô nội địa Đắk Lắk"""
+        try:
+            url = "https://giacaphe.com/"
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            res = requests.get(url, headers=headers, timeout=10)
+            soup = BeautifulSoup(res.text, 'html.parser')
+            
+            for row in soup.find_all('tr'):
+                cols = row.find_all('td')
+                if len(cols) >= 2 and ("Đắk Lắk" in cols[0].text or "Đắc Lắc" in cols[0].text):
+                    return cols[1].text.strip()
+            return "Đang cập nhật"
+        except Exception:
+            return "Đang cập nhật"
+
+# ==========================================
+# 2. PHÂN TÍCH TỪ HỘI ĐỒNG AI (DEEPSEEK)
+# ==========================================
+def analyze_market_with_deepseek(market_data):
+    api_key = os.environ.get("DEEPSEEK_API_KEY")
+    if not api_key:
+        return "⚠️ Lỗi: Chưa cấu hình DEEPSEEK_API_KEY"
+
+    prompt = f"""
+    Bạn là Hội đồng Chiến lược Giao dịch Cà phê Robusta quy mô 100-500 tấn tại Đắk Lắk.
+    
+    [DỮ LIỆU THỜI THỰC]
+    - Sàn London (ICE): {market_data['london']['price']} USD/tấn (Biến động: {market_data['london']['change']}%)
+    - Giá xô nội địa Đắk Lắk: {market_data['domestic']}
+    - Thời tiết Buôn Ma Thuột: {market_data['weather']['temp']}°C, Độ ẩm {market_data['weather']['humidity']}%, Mưa {market_data['weather']['rain']}mm
+    
+    Yêu cầu xuất báo cáo theo định dạng **Commercial Trading Plan** (ngắn gọn, sắc bén, đi thẳng vào vấn đề):
+    1. **Xu hướng & Tâm lý**: Xung lực sàn London + Tâm lý găm hàng/xả hàng tại Đắk Lắk dựa trên thời tiết & giá nội địa.
+    2. **Khuyến nghị Hành động**: Tỷ lệ Chốt Spot vs Khóa Forward (Ví dụ: Chốt 30% Spot, Giữ 70% Forward).
+    3. **Ngưỡng Rủi ro (Stop-Loss/Take-Profit)**: Giá mục tiêu để chốt tiếp.
+    """
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "json"
+    }
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.3
+    }
+    
+    try:
+        res = requests.post("https://api.deepseek.com/chat/completions", json=payload, headers=headers, timeout=30)
+        return res.json()['choices'][0]['message']['content']
+    except Exception as e:
+        return f"⚠️ Lỗi kết nối DeepSeek: {str(e)}"
+
+# ==========================================
+# 3. GỬI BÁO CÁO QUA TELEGRAM
+# ==========================================
+def send_telegram_message(text):
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not bot_token or not chat_id:
+        print("⚠️ Chưa cấu hình TELEGRAM_BOT_TOKEN hoặc TELEGRAM_CHAT_ID")
+        return
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown"
+    }
+    requests.post(url, json=payload, timeout=10)
+
+# ==========================================
+# MAIN EXECUTION
+# ==========================================
 if __name__ == "__main__":
-    market_data = MarketDataAgent.fetch()
-    strategy_report = CommercialStrategyAgent.analyze(market_data)
+    # 1. Gom dữ liệu
+    market_data = {
+        "london": CoffeeDataCollector.get_london_robusta(),
+        "domestic": CoffeeDataCollector.get_vietnam_domestic_prices(),
+        "weather": CoffeeDataCollector.get_daklak_weather()
+    }
     
-    msg = f"🏢 **HỘI ĐỒNG CHIẾN LƯỢC KHO HÀNG (100-500 TẤN)**\n"
-    msg += f"• Giá Sàn London: **{market_data['price']} USD/tấn** ({market_data['change']}%)\n"
-    msg += f"• Kỹ thuật: **MA5:** {market_data['ma5']} | **MA20:** {market_data['ma20']} | **RSI:** {market_data['rsi']}\n\n"
-    msg += f"📊 **Khuyến nghị Spot & Forward:**\n{strategy_report}"
+    # 2. Phân tích
+    report = analyze_market_with_deepseek(market_data)
     
-    send_telegram(msg)
-    print("Commercial Multi-Agent executed successfully.")
+    # 3. Bắn tin nhắn
+    final_message = f"📊 **BÁO CÁO CHIẾN LƯỢC ROBUSTA DAK LAK**\n\n{report}"
+    send_telegram_message(final_message)
+    print("✅ Đã gửi báo cáo thành công!")
