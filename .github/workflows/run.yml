@@ -1,9 +1,9 @@
-name: Robusta Daily Report
+name: Robusta Dual-Session Report
 
 on:
   schedule:
-    - cron: '0 1 * * *' # Chạy tự động mỗi ngày (khoảng 8h sáng giờ Việt Nam)
-  workflow_dispatch: # Cho phép bấm chạy thủ công khi cần
+    - cron: '0 1,9 * * *' # Chạy 2 lần/ngày: 8:00 sáng và 16:00 chiều (Giờ Việt Nam)
+  workflow_dispatch:
 
 jobs:
   run-bot:
