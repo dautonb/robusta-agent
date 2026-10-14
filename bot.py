@@ -16,7 +16,6 @@ def send_telegram(message):
         print(f"Lỗi gửi Telegram: {e}")
 
 def call_deepseek(prompt):
-    """Hàm gọi DeepSeek chung cho toàn bộ Agent"""
     if not CONFIG["DEEPSEEK_API_KEY"]: return "⚠️ Thiếu DeepSeek Key."
     url = "https://api.deepseek.com/chat/completions"
     headers = {"Authorization": f"Bearer {CONFIG['DEEPSEEK_API_KEY']}", "Content-Type": "application/json"}
@@ -28,8 +27,6 @@ def call_deepseek(prompt):
         return "DeepSeek bận."
     except Exception as e:
         return f"Lỗi kết nối: {e}"
-
-# ==================== CÁC AGENT CHUYÊN TRÁCH ====================
 
 class MarketDataAgent:
     @staticmethod
@@ -56,53 +53,35 @@ class MarketDataAgent:
                 return {"price": latest, "change": change, "ma5": ma5, "ma20": ma20, "rsi": rsi, "source": "Yahoo Finance (Live)"}
         except Exception:
             pass
-        return {"price": 4215, "change": 0.45, "ma5": 4200, "ma20": 4180, "rsi": 52.0, "source": "Dự phòng tiêu chuẩn"}
+        return {"price": 3450, "change": 0.2, "ma5": 3440, "ma20": 3480, "rsi": 49.0, "source": "Dự phòng tiêu chuẩn"}
 
-class TechnicalAnalystAgent:
+class CommercialStrategyAgent:
     @staticmethod
     def analyze(data):
         prompt = f"""
-        Giá Robusta London: {data['price']} USD ({data['change']}%). MA5: {data['ma5']}, MA20: {data['ma20']}, RSI: {data['rsi']}.
-        Đánh giá nhanh xu hướng kỹ thuật, vùng cản và hỗ trợ ngắn hạn dưới 50 từ.
-        """
-        return call_deepseek(prompt)
-
-class MacroAgent:
-    @staticmethod
-    def evaluate(data):
-        prompt = f"""
-        Giá Robusta: {data['price']} USD. 
-        Đánh giá ngắn gọn áp lực nguồn cung Tây Nguyên và tâm lý thị trường nông sản dưới 40 từ.
-        """
-        return call_deepseek(prompt)
-
-class StrategyManagerAgent:
-    @staticmethod
-    def synthesize(data, tech, macro):
-        prompt = f"""
-        Giá: {data['price']} USD.
-        - Kỹ thuật: {tech}
-        - Vĩ mô: {macro}
+        Dữ liệu thị trường Robusta London:
+        - Giá hiện tại: {data['price']} USD/tấn ({data['change']}%)
+        - MA5: {data['ma5']} | MA20: {data['ma20']} | RSI: {data['rsi']}
         
-        Với tư cách là Tổng chiến lược gia, hãy đưa ra Kế hoạch giao dịch chuyên nghiệp (Hành động, Mức chốt lời/cắt lỗ) dưới 60 từ, định dạng Markdown.
+        Đối tượng phân tích: Chủ kho hàng lớn (quy mô 100-500 tấn tại Tây Nguyên) đang đứng trước lựa chọn: BÁN GIAO NGAY (Spot) hay CHỐT HỢP ĐỒNG KỲ HẠN (Forward).
+        
+        Hãy đưa ra phân tích sắc bén, chuyên nghiệp gồm 3 ý ngắn gọn:
+        1. **Trạng thái kỹ thuật ngắn hạn:** Đánh giá động lượng và rủi ro điều chỉnh.
+        2. **Quyết định Giao ngay (Spot):** Có nên xả bớt hàng ngay vùng giá này để bảo toàn dòng tiền hay giữ lại?
+        3. **Quyết định Kỳ hạn (Forward):** Chiến lược khóa giá tương lai hoặc phòng hộ rủi ro (Hedging) lúc này nên cấu trúc thế nào?
+        
+        Trình bày cực kỳ súc tích, chuyên nghiệp, định dạng Markdown, dưới 100 từ.
         """
         return call_deepseek(prompt)
-
-# ==================== ĐIỀU PHỐI HỆ THỐNG ====================
 
 if __name__ == "__main__":
     market_data = MarketDataAgent.fetch()
+    strategy_report = CommercialStrategyAgent.analyze(market_data)
     
-    tech_insight = TechnicalAnalystAgent.analyze(market_data)
-    macro_insight = MacroAgent.evaluate(market_data)
-    final_decision = StrategyManagerAgent.synthesize(market_data, tech_insight, macro_insight)
+    msg = f"🏢 **HỘI ĐỒNG CHIẾN LƯỢC KHO HÀNG (100-500 TẤN)**\n"
+    msg += f"• Giá Sàn London: **{market_data['price']} USD/tấn** ({market_data['change']}%)\n"
+    msg += f"• Kỹ thuật: **MA5:** {market_data['ma5']} | **MA20:** {market_data['ma20']} | **RSI:** {market_data['rsi']}\n\n"
+    msg += f"📊 **Khuyến nghị Spot & Forward:**\n{strategy_report}"
     
-    report = f"🏛️ **HỘI ĐỒNG MULTI-AGENT (DEEPSEEK)**\n"
-    report += f"• Giá Sàn London: **{market_data['price']} USD/tấn** ({market_data['change']}%)\n"
-    report += f"• Chỉ báo: **MA5:** {market_data['ma5']} | **MA20:** {market_data['ma20']} | **RSI:** {market_data['rsi']}\n\n"
-    report += f"📊 **Technical Agent:**\n{tech_insight}\n\n"
-    report += f"🌍 **Macro Agent:**\n{macro_insight}\n\n"
-    report += f"🎯 **Strategy Manager:**\n{final_decision}"
-    
-    send_telegram(report)
-    print("Multi-Agent pipeline executed successfully.")
+    send_telegram(msg)
+    print("Commercial Multi-Agent executed successfully.")
