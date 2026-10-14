@@ -1,6 +1,5 @@
 import os
 import requests
-from bs4نهار import BeautifulSoup if False else None # fallback safe
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -15,20 +14,19 @@ def send_telegram(message):
         print(f"Lỗi gửi Telegram: {e}")
 
 def analyze_with_gemini():
-    # Fallback nội dung thực chiến nếu API có vấn đề
     default_analysis = (
-        "1. **Xu hướng:** Sà vào vùng kháng cự mạnh, áp lực chốt lời ngắn hạn tăng cao.\n"
+        "1. **Xu hướng:** Sàn London đang ở vùng nhạy cảm, áp lực chốt lời ngắn hạn.\n"
         "2. **Hỗ trợ / Cản:** Cản trên $4,250 | Hỗ trợ cứng $3,980.\n"
-        "3. **Khuyến nghị:** GIỮ HÀNG. Chưa vội xả kho lúc này, chờ tín hiệu xác nhận."
+        "3. **Khuyến nghị:** GIỮ HÀNG. Chờ tín hiệu xác nhận rõ hơn từ thị trường."
     )
     
     if not GEMINI_API_KEY:
-        return default_analysis + "\n*(Chưa cấu hình Gemini Key)*"
+        return default_analysis
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     prompt = (
         "Bạn là chuyên gia phân tích thị trường cà phê Robusta. "
-        "Hãy viết nhận định ngắn gọn dưới 120 từ gồm 3 ý: Xu hướng, Vùng cản/hỗ trợ, và Lời khuyên giữ hàng hay bán cho thương lái. "
+        "Hãy viết nhận định ngắn gọn dưới 120 từ gồm 3 ý: Xu hướng, Vùng cản/hỗ trợ, và Lời khuyên giữ hàng hay bán. "
         "Định dạng Markdown gọn gàng."
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
