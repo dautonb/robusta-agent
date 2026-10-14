@@ -74,7 +74,7 @@ class CoffeeDataCollector:
             return "98,500"
 
 # ==========================================
-# 2. PHÂN TÍCH KỸ THUẬT & VẼ BIỂU ĐỒ 2 TẦNG
+# 2. PHÂN TÍCH KỸ THUẬT & BIỂU ĐỒ 2 TẦNG
 # ==========================================
 def calculate_technical_indicators(prices):
     prices_arr = np.array(prices, dtype=float)
@@ -118,7 +118,7 @@ def generate_technical_chart(current_price=3450):
     ax1.set_facecolor('#131722')
     ax1.plot(dates, prices, color='#2962FF', linewidth=2, label='ICE Robusta')
     ax1.plot(dates, ma20, color='#FF9800', linewidth=1.5, linestyle='--', label='MA20')
-    ax1.set_title('ICE LONDON ROBUSTA - XU HƯỚNG KỸ THUẬT (MA20 + RSI)', color='#d1d4dc', fontsize=11, fontweight='bold', pad=10)
+    ax1.set_title('ICE LONDON ROBUSTA - KỸ THUẬT KHO TỔNG (MA20 + RSI)', color='#d1d4dc', fontsize=11, fontweight='bold', pad=10)
     ax1.grid(True, color='#2a2e39', linestyle='--', linewidth=0.5)
     ax1.legend(loc='upper left', fontsize=8, facecolor='#1e222d', edgecolor='none')
 
@@ -138,7 +138,7 @@ def generate_technical_chart(current_price=3450):
     return chart_path, prices[-1], ma20[-1], rsi[-1]
 
 # ==========================================
-# 3. HÀM GỌI API (DEEPSEEK NATIVE + OPENROUTER FREE)
+# 3. KẾT NỐI AI (DEEPSEEK NATIVE + OPENROUTER PAID)
 # ==========================================
 def call_deepseek_native(prompt):
     api_key = os.environ.get("DEEPSEEK_API_KEY")
@@ -157,12 +157,12 @@ def call_deepseek_native(prompt):
     try:
         res = requests.post("https://api.deepseek.com/v1/chat/completions", json=payload, headers=headers, timeout=30)
         if res.status_code != 200:
-            return f"⚠️ DeepSeek API lỗi {res.status_code}: {res.text[:100]}"
+            return f"⚠️ DeepSeek lỗi {res.status_code}: {res.text[:100]}"
         return res.json()['choices'][0]['message']['content']
     except Exception as e:
         return f"⚠️ Lỗi kết nối DeepSeek: {str(e)}"
 
-def call_openrouter_free(model_name, prompt):
+def call_openrouter_paid(model_name, prompt):
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         return "⚠️ Lỗi: Chưa cấu hình OPENROUTER_API_KEY"
@@ -187,7 +187,7 @@ def call_openrouter_free(model_name, prompt):
         return f"⚠️ Lỗi kết nối OpenRouter ({model_name}): {str(e)}"
 
 # ==========================================
-# 4. HỘI ĐỒNG AI TRANH BIỆN (DEEPSEEK GỐC + 2 AI OPENROUTER)
+# 4. HỘI ĐỒNG TRANH BIỆN (CHAIN-OF-DEBATE)
 # ==========================================
 def run_debate_council(market_data, tech_indicators):
     arabica_ton = market_data['arabica']['price_usd_ton']
@@ -195,50 +195,42 @@ def run_debate_council(market_data, tech_indicators):
     gap = arabica_ton - robusta_ton
 
     data_summary = f"""
-    - Sàn London (Robusta): {robusta_ton} USD/tấn (Kỹ thuật: MA20={tech_indicators['ma20']:.1f}, RSI={tech_indicators['rsi']:.1f})
+    - Sàn London (Robusta): {robusta_ton} USD/tấn (MA20={tech_indicators['ma20']:.1f}, RSI={tech_indicators['rsi']:.1f})
     - Sàn NY / Brazil (Arabica): {arabica_ton} USD/tấn
     - Chênh lệch Arabica vs Robusta: {gap:.1f} USD/tấn
     - Giá xô Đắk Lắk: {market_data['domestic']} VNĐ/kg
-    - Thời tiết BMT: Nhiệt độ {market_data['weather']['temp']}°C, Mưa {market_data['weather']['rain']}mm
+    - Thời tiết BMT: {market_data['weather']['temp']}°C, Mưa {market_data['weather']['rain']}mm
     """
 
-    # --- BƯỚC 1: DeepSeek Gốc lập kế hoạch thực chiến ---
-    print("🤖 [1/3] DeepSeek gốc đang lập phương án...")
-    proposal_1 = call_deepseek_native(f"Dữ liệu thị trường:\n{data_summary}\n\nBạn là Chuyên gia Thực chiến. Đề xuất ngay tỷ lệ Bán tiền tươi (Spot), Bán giao xa (Forward), và Giữ lại kho. Nêu rõ mức giá mục tiêu ngắn hạn.")
+    print("🤖 [1/3] DeepSeek gốc đang lên phương án...")
+    proposal_1 = call_deepseek_native(f"Dữ liệu thị trường:\n{data_summary}\n\nBạn là Chuyên gia Thực chiến. Đề xuất tỷ lệ Bán tiền tươi (Spot), Bán giao xa (Forward) và Giữ lại kho (100-500 tấn).")
 
-    # --- BƯỚC 2: Llama 3.3 (OpenRouter Free) soi rủi ro ---
-    print("🛡️ [2/3] Llama 3.3 đang soi lỗ hổng rủi ro...")
-    critique_2 = call_openrouter_free("meta-llama/llama-3.3-70b-instruct:free", f"Dữ liệu thị trường:\n{data_summary}\n\nĐề xuất của Chuyên gia:\n{proposal_1}\n\nBạn là Sĩ quan Quản trị Rủi ro. Hãy chỉ ra rủi ro sụt giảm giá dựa trên chỉ số MA20/RSI và yêu cầu vạch đỏ cắt lỗ khắt khe.")
+    print("🛡️ [2/3] Llama 3.3 đang soi rủi ro...")
+    critique_2 = call_openrouter_paid("meta-llama/llama-3.3-70b-instruct", f"Dữ liệu:\n{data_summary}\n\nĐề xuất:\n{proposal_1}\n\nBạn là Sĩ quan Rủi ro. Vạch rõ điểm yếu kỹ thuật MA20/RSI và thắt chặt vạch đỏ cắt lỗ.")
 
-    # --- BƯỚC 3: Gemini Flash (OpenRouter Free) phán quyết ---
-    print("🏛️ [3/3] Gemini Flash đang đưa ra phán quyết chung cuộc...")
-    final_report = call_openrouter_free("google/gemini-2.5-flash:free", f"""
-    DỮ LIỆU ĐẦU VÀO:
-    {data_summary}
+    print("🏛️ [3/3] Gemini phán quyết chung cuộc...")
+    final_report = call_openrouter_paid("google/gemini-2.5-flash", f"""
+    DỮ LIỆU: {data_summary}
+    ĐỀ XUẤT: {proposal_1}
+    PHẢN BIỆN: {critique_2}
 
-    Ý KIẾN DEEPSEEK:
-    {proposal_1}
-
-    Ý KIẾN QUẢN TRỊ RỦI RO:
-    {critique_2}
-
-    Bạn là Chủ tịch Hội đồng Chiến lược Kho hàng (100–500 tấn Đắk Lắk). Hãy chốt bản lệnh thương mại SÚC TÍCH, DỄ HIỂU, TRỰC DIỆN:
+    Bạn là Chủ tịch Hội đồng Chiến lược Kho hàng Đắk Lắk. Chốt bản lệnh SÚC TÍCH, SẮC LẠNH:
 
     🌍 **1. THẾ TRẬN THỊ TRƯỜNG**
-    - Thế giới & Brazil: [Đánh giá nguồn cung]
-    - Đắk Lắk & Kỹ thuật: [Tổng hợp RSI/MA20 và tâm lý gom hàng]
+    - Vĩ mô & Nguồn cung: [...]
+    - Kỹ thuật & Tâm lý Đắk Lắk: [...]
 
-    💼 **2. KẾ HOẠCH BÁN HÀNG & DÒNG TIỀN (Kho 100-500 tấn)**
-    - **BÁN TIỀN TƯƠI (Spot)**: [%] — [Mức giá]
-    - **CHỐT GIÁ TRƯỚC (Forward)**: [%] — [Mức giá]
-    - **DỰ PHÒNG KHO**: [%] — [Mục đích]
+    💼 **2. KẾ HOẠCH DÒNG TIỀN (Kho 100-500 tấn)**
+    - **SPOT (Tiền tươi)**: [...]
+    - **FORWARD (Giao xa)**: [...]
+    - **GỮI KHO**: [...]
 
     🛡️ **3. VẠCH ĐỎ AN TOÀN**
-    - **Điểm xả hàng cắt lỗ**: [Ngưỡng giá xả gấp]
-    - **Điểm chốt lời tiếp theo**: [Mức giá mục tiêu]
+    - **Cắt lỗ khi**: [...]
+    - **Chốt lời tiếp**: [...]
 
-    📌 **4. LỆNH ĐIỀU HÀNH 1 DÒNG**
-    [Một câu hành động dứt khoát nhất cho chủ kho]
+    📌 **4. LỆNH ĐIỀU HÀNH CHỦ ĐẠO**
+    [...]
     """)
     return final_report
 
@@ -246,30 +238,25 @@ def run_debate_council(market_data, tech_indicators):
 # 5. GỬI TELEGRAM
 # ==========================================
 def send_telegram_report(photo_path, report_text):
-    bot_token, chat_id = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
-    if not bot_token or not chat_id:
-        print("⚠️ Thiếu cấu hình Telegram Token hoặc Chat ID")
+    token, chat_id = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
         return
 
     if photo_path and os.path.exists(photo_path):
         requests.post(
-            f"https://api.telegram.org/bot{bot_token}/sendPhoto",
-            data={'chat_id': chat_id, 'caption': "🌐 **BIỂU ĐỒ KỸ THUẬT & DÒNG TIỀN (MA20 + RSI)**", 'parse_mode': 'Markdown'},
+            f"https://api.telegram.org/bot{token}/sendPhoto",
+            data={'chat_id': chat_id, 'caption': "🌐 **BIỂU ĐỒ KỸ THUẬT & DÒNG TIỀN**", 'parse_mode': 'Markdown'},
             files={'photo': open(photo_path, 'rb')},
             timeout=20
         )
 
     requests.post(
-        f"https://api.telegram.org/bot{bot_token}/sendMessage",
-        json={'chat_id': chat_id, 'text': f"🏛️ **BÁO CÁO HỘI ĐỒNG AI (DEEPSEEK + OPENROUTER)**\n\n{report_text}", 'parse_mode': 'Markdown'},
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        json={'chat_id': chat_id, 'text': f"🏛️ **BÁO CÁO HỘI ĐỒNG CHIẾN LƯỢC**\n\n{report_text}", 'parse_mode': 'Markdown'},
         timeout=10
     )
 
-# ==========================================
-# MAIN EXECUTION
-# ==========================================
 if __name__ == "__main__":
-    print("🔄 Thu thập dữ liệu...")
     market_data = {
         "london": CoffeeDataCollector.get_london_robusta(),
         "arabica": CoffeeDataCollector.get_brazil_arabica(),
@@ -277,13 +264,9 @@ if __name__ == "__main__":
         "weather": CoffeeDataCollector.get_daklak_weather()
     }
     
-    print("📈 Vẽ biểu đồ kỹ thuật...")
-    chart_file, current_p, ma20_val, rsi_val = generate_technical_chart(market_data['london']['price'])
+    chart_file, _, ma20_val, rsi_val = generate_technical_chart(market_data['london']['price'])
     tech_indicators = {"ma20": ma20_val, "rsi": rsi_val}
     
-    print("🏛️ Kích hoạt hội đồng AI tranh biện...")
     final_decision = run_debate_council(market_data, tech_indicators)
-    
-    print("🚀 Gửi báo cáo Telegram...")
     send_telegram_report(chart_file, final_decision)
-    print("✅ Hoàn tất!")
+    print("✅ Hoàn tất chu trình tự động!")
