@@ -49,8 +49,10 @@ def agent_deepseek(data):
 def agent_gemini(data, tech_insight):
     if not GEMINI_API_KEY:
         return f"Kỹ thuật: {tech_insight}"
-    # Đã cập nhật sang model gemini-1.5-flash ổn định
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    
+    # Đã sửa v1beta thành v1 chuẩn xác
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    
     prompt = f"""
     Dữ liệu giá: {data['price']} USD ({data['change']}%).
     Phân tích kỹ thuật (DeepSeek): {tech_insight}
