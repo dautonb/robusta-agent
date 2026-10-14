@@ -1,6 +1,6 @@
 import os
 import requests
-from datetime import datetime
+from bs4 import BeautifulSoup
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -8,46 +8,21 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def get_robusta_data():
     try:
-        # Sử dụng API trực tiếp của Yahoo Finance với Header giả lập trình duyệt để tránh bị chặn trên GitHub
-        url = "https://query1.finance.yahoo.com/v8/finance/chart/RM=F?interval=1d&range=1mo"
+        # Cào trực tiếp từ giacaphe.com - trang chuyên về giá cà phê nội địa và London
+        url = "https://giacaphe.com/"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        res = requests.get(url, headers=headers, timeout=10)
-        data_json = res.json()
+        res = requests.get(url, headers=headers, timeout=15)
+        soup = BeautifulSoup(res.text, 'html.parser')
         
-        result = data_json['chart']['result'][0]
-        timestamps = result['timestamp']
-        quote = result['indicators']['quote'][0]
-        closes = quote['close']
-        highs = quote['high']
-        lows = quote['low']
-        
-        # Lọc bỏ các giá trị trống (None)
-        valid_data = []
-        for t, c, h, l in zip(timestamps, closes, highs, lows):
-            if c is not None and h is not None and l is not None:
-                valid_data.append((t, c, h, l))
+        # Gom toàn bộ nội dung văn bản chứa thông tin giá trên trang chủ
+        main_content = ""
+        for p in soup.select('table, .box-content, p, div'):
+            t = p.get_text(strip=True)
+            if "London" in t or "Đắk Lắk" in t or "giá cà phê" in t.lower():
+                main_content += t + "\n"
                 
-        if len(valid_data) < 2:
-            return None
-            
-        latest_price = valid_data[-1][1]
-        prev_price = valid_data[-2][1]
-        change_pct = ((latest_price - prev_price) / prev_price) * 100
-        high_price = valid_data[-1][2]
-        low_price = valid_data[-1][3]
-        
-        # Lấy lịch sử 5 phiên gần nhất
-        history_str = ""
-        for t, c, h, l in valid_data[-5:]:
-            dt = datetime.fromtimestamp(t)
-            history_str += f"- {dt.strftime('%d/%m')}: {c:.0f} USD\n"
-
         return {
-            "latest": round(latest_price),
-            "change_pct": round(change_pct, 2),
-            "high": round(high_price),
-            "low": round(low_price),
-            "history": history_str
+            "raw_text": main_content[:4000] # Truyền nội dung thô để AI tự phân tích
         }
     except Exception as e:
         print(f"Lỗi lấy giá: {e}")
@@ -58,18 +33,14 @@ def analyze_with_gemini(data):
     
     prompt = f"""
     Bạn là một chuyên gia phân tích thị trường cà phê Robusta. 
-    Dữ liệu giá sàn London (RM=F) mới nhất:
-    - Giá đóng cửa gần nhất: {data['latest']} USD/tấn
-    - Biến động: {data['change_pct']}%
-    - Thấp nhất / Cao nhất phiên: {data['low']} - {data['high']} USD/tấn
-    - Lịch sử 5 phiên gần đây:
-    {data['history']}
+    Dưới đây là dữ liệu mới nhất được cào từ trang giacaphe.com:
+    {data['raw_text']}
 
-    Hãy đưa ra bản phân tích ngắn gọn (dưới 150 từ) gồm 3 phần:
-    1. Nhận định xu hướng kỹ thuật (Tăng/Giảm/Đi ngang).
-    2. Vùng cản / Hỗ trợ ngắn hạn.
+    Hãy đọc dữ liệu trên, tự động tìm mức giá sàn London và giá cà phê nội địa Đắk Lắk mới nhất, sau đó đưa ra bản phân tích ngắn gọn (dưới 150 từ) gồm 3 phần:
+    1. Giá Robusta London & Giá nội địa mới nhất tìm được.
+    2. Nhận định xu hướng ngắn hạn.
     3. Khuyên người thu mua nên GIỮ HÀNG hay CHỐT LỜI TỪNG PHẦN.
-    Định dạng Markdown gọn gàng để gửi qua tin nhắn.
+    Định dạng Markdown gọn gàng để gửi qua tin nhắn Telegram.
     """
 
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -90,12 +61,10 @@ def send_telegram(message):
 
 if __name__ == "__main__":
     data = get_robusta_data()
-    if data:
+    if data and data['raw_text']:
         analysis = analyze_with_gemini(data)
-        msg = f"📊 **BẢN TIN ROBUSTA LONDON (RM=F)**\n"
-        msg += f"• Giá hiện tại: **{data['latest']} USD/tấn** ({data['change_pct']}%)\n"
-        msg += f"• Biên độ: {data['low']} - {data['high']} USD\n\n"
+        msg = f"📊 **BẢN TIN THỊ TRƯỜNG CAFE**\n\n"
         msg += f"🧠 **PHÂN TÍCH TỪ AI AGENT:**\n{analysis}"
         send_telegram(msg)
     else:
-        send_telegram("⚠️ Không thể cập nhật dữ liệu giá Robusta hôm nay do lỗi kết nối dữ liệu.")
+        send_telegram("⚠️ Không thể cập nhật dữ liệu giá Robusta hôm nay do lỗi kết nối nguồn tin.")
