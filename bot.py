@@ -3,6 +3,7 @@ import requests
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
@@ -14,61 +15,82 @@ def send_telegram(message):
     except Exception as e:
         print(f"Lỗi gửi Telegram: {e}")
 
-def technical_analyst_agent():
-    """Agent 1: DeepSeek đóng vai trò chuyên gia phân tích kỹ thuật & định lượng"""
-    if not DEEPSEEK_API_KEY:
+def agent_deepseek():
+    """Agent 1: Chuyên gia Phân tích Kỹ thuật & Định lượng"""
+    if not DEEPSEEK_API_KEY: 
         return "⚠️ Chưa cấu hình DeepSeek API Key."
     
     url = "https://api.deepseek.com/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
     payload = {
         "model": "deepseek-chat",
-        "messages": [
-            {"role": "system", "content": "Bạn là chuyên gia phân tích kỹ thuật thị trường nông sản và cà phê Robusta."},
-            {"role": "user", "content": "Hãy đánh giá nhanh xu hướng giá Robusta hiện tại, xác định vùng cản kỹ thuật ngắn hạn và đưa ra phán đoán xác suất (Tăng/Giảm). Viết sắc sảo, thực chiến, dưới 80 từ."}
-        ],
+        "messages": [{"role": "user", "content": "Đánh giá ngắn xu hướng kỹ thuật giá Robusta London, nêu nhanh vùng cản dưới 50 từ."}],
         "stream": False
     }
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=15)
-        return res.json()['choices']['message']['content']
+        data = res.json()
+        # Đã thêm [0] để trỏ chính xác vào phần tử list của choices
+        return data['choices'][0]['message']['content']
     except Exception as e:
-        return f"DeepSeek Agent bận đi uống cafe: {str(e)}"
+        return f"DeepSeek bận: {str(e)}"
 
-def strategist_agent(tech_insight):
-    """Agent 2: Gemini đóng vai trò tổng hợp và ra quyết định chiến lược cuối cùng"""
-    if not GEMINI_API_KEY:
-        return f"💡 **Phân tích kỹ thuật từ DeepSeek:**\n{tech_insight}\n\n*(Gemini chưa được cấu hình)*"
+def agent_openrouter():
+    """Agent 2: Chuyên gia Vĩ mô & Tin tức"""
+    if not OPENROUTER_API_KEY: 
+        return "⚠️ Chưa cấu hình OpenRouter API Key."
+    
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "HTTP-Referer": "https://github.com/robusta-agent",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "google/gemma-2-9b-it:free",
+        "messages": [{"role": "user", "content": "Góc nhìn nhanh về nguồn cung và tâm lý thị trường cà phê Tây Nguyên lúc này dưới 50 từ."}],
+        "stream": False
+    }
+    try:
+        res = requests.post(url, json=payload, headers=headers, timeout=15)
+        data = res.json()
+        return data['choices'][0]['message']['content']
+    except Exception as e:
+        return f"OpenRouter bận: {str(e)}"
 
+def agent_gemini(tech, macro):
+    """Agent 3: Trưởng ban Chiến lược tổng hợp ra quyết định"""
+    if not GEMINI_API_KEY: 
+        return f"Kỹ thuật: {tech}\nVĩ mô: {macro}"
+    
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     prompt = f"""
-    Dựa trên báo cáo kỹ thuật từ DeepSeek Agent:
-    "{tech_insight}"
+    Tổng hợp báo cáo từ 2 chuyên gia:
+    1. Kỹ thuật (DeepSeek): {tech}
+    2. Vĩ mô (OpenRouter): {macro}
 
-    Hãy đóng vai trò cố vấn chiến lược cho thương lái cà phê, đưa ra lời khuyên hành động dứt khoát cuối cùng (GIỮ HÀNG hay XẢ KHO TỪNG PHẦN). 
-    Định dạng Markdown ngắn gọn, sắc bén, không dài dòng.
+    Hãy đưa ra lời khuyên hành động quyết đoán cuối cùng cho thương lái (GIỮ HÀNG hay BÁN TỪNG PHẦN). Ngắn gọn, sắc bén dưới 100 từ, định dạng Markdown.
     """
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     try:
         res = requests.post(url, json=payload, headers={'Content-Type': 'application/json'}, timeout=15)
-        candidates = res.json().get('candidates')
+        data = res.json()
+        candidates = data.get('candidates')
         if candidates:
-            return candidates[0].get('content', {}).get('parts', [{}])[0].get('text')
+            return candidates[0].get('content', {}).get('parts', [{}])[0].get('text', 'Không có nội dung.')
     except Exception as e:
-        pass
-    return tech_insight
+        return f"Gemini bận: {str(e)}"
+    return "Gemini gặp sự cố tổng hợp."
 
 if __name__ == "__main__":
-    # Kích hoạt chuỗi Multi-Agent
-    insight = technical_analyst_agent()
-    final_decision = strategist_agent(insight)
+    t_insight = agent_deepseek()
+    m_insight = agent_openrouter()
+    final_verdict = agent_gemini(t_insight, m_insight)
     
-    msg = "🤖 **MULTI-AGENT ROBUSTA BRIEFING**\n\n"
-    msg += f"📊 **DeepSeek (Technical Analyst):**\n{insight}\n\n"
-    msg += f"🧠 **Gemini (Chief Strategist):**\n{final_decision}"
+    msg = "🌐 **HỘI ĐỒNG 3 AI AGENT (ROBUSTA)**\n\n"
+    msg += f"📊 **DeepSeek (Technical):**\n{t_insight}\n\n"
+    msg += f"🌍 **OpenRouter (Macro):**\n{m_insight}\n\n"
+    msg += f"🧠 **Gemini (Chief Strategy):**\n{final_verdict}"
     
     send_telegram(msg)
-    print("Multi-Agent đã chạy và gửi báo cáo thành công!")
+    print("Multi-Agent 3 mảnh đã chạy xong!")
