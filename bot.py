@@ -1,6 +1,6 @@
 import os
 import requests
-import yfinance as yf
+from datetime import datetime
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -8,27 +8,46 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def get_robusta_data():
     try:
-        # Sử dụng mã RM=F chuẩn của Robusta Futures trên Yahoo Finance
-        ticker = yf.Ticker("RM=F")
-        df = ticker.history(period="1mo")
-        if df.empty or len(df) < 2:
+        # Sử dụng API trực tiếp của Yahoo Finance với Header giả lập trình duyệt để tránh bị chặn trên GitHub
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/RM=F?interval=1d&range=1mo"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        res = requests.get(url, headers=headers, timeout=10)
+        data_json = res.json()
+        
+        result = data_json['chart']['result'][0]
+        timestamps = result['timestamp']
+        quote = result['indicators']['quote'][0]
+        closes = quote['close']
+        highs = quote['high']
+        lows = quote['low']
+        
+        # Lọc bỏ các giá trị trống (None)
+        valid_data = []
+        for t, c, h, l in zip(timestamps, closes, highs, lows):
+            if c is not None and h is not None and l is not None:
+                valid_data.append((t, c, h, l))
+                
+        if len(valid_data) < 2:
             return None
-        
-        latest_price = df['Close'].iloc[-1]
-        prev_price = df['Close'].iloc[-2]
+            
+        latest_price = valid_data[-1][1]
+        prev_price = valid_data[-2][1]
         change_pct = ((latest_price - prev_price) / prev_price) * 100
-        high_price = df['High'].iloc[-1]
-        low_price = df['Low'].iloc[-1]
+        high_price = valid_data[-1][2]
+        low_price = valid_data[-1][3]
         
-        last_5_days = df['Close'].tail(5).to_dict()
-        days_str = "\n".join([f"- {date.strftime('%d/%m')}: {price:.0f} USD" for date, price in last_5_days.items()])
+        # Lấy lịch sử 5 phiên gần nhất
+        history_str = ""
+        for t, c, h, l in valid_data[-5:]:
+            dt = datetime.fromtimestamp(t)
+            history_str += f"- {dt.strftime('%d/%m')}: {c:.0f} USD\n"
 
         return {
             "latest": round(latest_price),
             "change_pct": round(change_pct, 2),
             "high": round(high_price),
             "low": round(low_price),
-            "history": days_str
+            "history": history_str
         }
     except Exception as e:
         print(f"Lỗi lấy giá: {e}")
