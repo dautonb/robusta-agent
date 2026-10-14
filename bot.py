@@ -69,15 +69,16 @@ def analyze_market_with_deepseek(market_data):
     - Giá xô nội địa Đắk Lắk: {market_data['domestic']}
     - Thời tiết Buôn Ma Thuột: {market_data['weather']['temp']}°C, Độ ẩm {market_data['weather']['humidity']}%, Mưa {market_data['weather']['rain']}mm
     
-    Yêu cầu xuất báo cáo theo định dạng **Commercial Trading Plan** (ngắn gọn, sắc bén, đi thẳng vào vấn đề):
-    1. **Xu hướng & Tâm lý**: Xung lực sàn London + Tâm lý găm hàng/xả hàng tại Đắk Lắk dựa trên thời tiết & giá nội địa.
-    2. **Khuyến nghị Hành động**: Tỷ lệ Chốt Spot vs Khóa Forward (Ví dụ: Chốt 30% Spot, Giữ 70% Forward).
-    3. **Ngưỡng Rủi ro (Stop-Loss/Take-Profit)**: Giá mục tiêu để chốt tiếp.
+    Yêu cầu xuất báo cáo theo định dạng Commercial Trading Plan (ngắn gọn, sắc bén):
+    1. Xu hướng & Tâm lý
+    2. Khuyến nghị Hành động (Tỷ lệ Spot vs Forward)
+    3. Ngưỡng Rủi ro (Stop-Loss / Take-Profit)
     """
 
+    # Sửa Content-Type chuẩn application/json
     headers = {
         "Authorization": f"Bearer {api_key}",
-        "Content-Type": "json"
+        "Content-Type": "application/json"
     }
     payload = {
         "model": "deepseek-chat",
@@ -86,8 +87,17 @@ def analyze_market_with_deepseek(market_data):
     }
     
     try:
-        res = requests.post("https://api.deepseek.com/chat/completions", json=payload, headers=headers, timeout=30)
-        return res.json()['choices'][0]['message']['content']
+        res = requests.post("https://api.deepseek.com/v1/chat/completions", json=payload, headers=headers, timeout=30)
+        
+        # Kiểm tra nếu HTTP status không phải 200 (ví dụ 500, 502, 401)
+        if res.status_code != 200:
+            return f"⚠️ Server DeepSeek phản hồi lỗi HTTP {res.status_code}: {res.text[:100]}"
+            
+        data = res.json()
+        return data['choices'][0]['message']['content']
+        
+    except requests.exceptions.JSONDecodeError:
+        return f"⚠️ Lỗi: API trả về dữ liệu không đúng chuẩn JSON (Mã trả về: {res.status_code})"
     except Exception as e:
         return f"⚠️ Lỗi kết nối DeepSeek: {str(e)}"
 
