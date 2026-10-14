@@ -138,7 +138,7 @@ def generate_technical_chart(current_price=4500):
     return chart_path, prices[-1], ma20[-1], rsi[-1]
 
 # ==========================================
-# 3. KẾT NỐI AI (DEEPSEEK NATIVE + OPENROUTER PAID)
+# 3. KẾT NỐI DEEPSEEK NATIVE CHÍNH TÔNG
 # ==========================================
 def call_deepseek_native(prompt):
     api_key = os.environ.get("DEEPSEEK_API_KEY")
@@ -162,34 +162,10 @@ def call_deepseek_native(prompt):
     except Exception as e:
         return f"⚠️ Lỗi kết nối DeepSeek: {str(e)}"
 
-def call_openrouter_paid(model_name, prompt):
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        return "⚠️ Lỗi: Chưa cấu hình OPENROUTER_API_KEY"
-
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "HTTP-Referer": "https://daklak-coffee-bot.local",
-        "X-Title": "DakLak Coffee Advisory",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": model_name,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.4
-    }
-    try:
-        res = requests.post("https://openrouter.ai/api/v1/chat/completions", json=payload, headers=headers, timeout=35)
-        if res.status_code != 200:
-            return f"⚠️ OpenRouter lỗi {res.status_code}: {res.text[:100]}"
-        return res.json()['choices'][0]['message']['content']
-    except Exception as e:
-        return f"⚠️ Lỗi kết nối OpenRouter ({model_name}): {str(e)}"
-
 # ==========================================
-# 4. HỘI ĐỒNG TRANH BIỆN (CHAIN-OF-DEBATE)
+# 4. CHIẾN LƯỢC ĐỘC QUYỀN TỪ DEEPSEEK
 # ==========================================
-def run_debate_council(market_data, tech_indicators):
+def get_deepseek_strategy(market_data, tech_indicators):
     current_date_str = datetime.datetime.now().strftime('%Y.%m.%d')
     
     arabica_ton = market_data['arabica']['price_usd_ton']
@@ -197,46 +173,37 @@ def run_debate_council(market_data, tech_indicators):
     gap = arabica_ton - robusta_ton
 
     data_summary = f"""
-    - Thời gian thực tế: {current_date_str} (Tháng 10/2026)
+    - Thời gian: {current_date_str} (Tháng 10/2026)
     - Sàn London (Robusta): {robusta_ton} USD/tấn (MA20={tech_indicators['ma20']:.1f}, RSI={tech_indicators['rsi']:.1f})
-    - Sàn NY / Brazil (Arabica): {arabica_ton} USD/tấn
-    - Chênh lệch Arabica vs Robusta: {gap:.1f} USD/tấn
-    - Giá xô Đắk Lắk: {market_data['domestic']} VNĐ/kg
+    - Sàn Arabica (New York): {arabica_ton} USD/tấn (Chênh lệch A-R: {gap:.1f} USD/tấn)
+    - Giá xô nội địa Đắk Lắk: {market_data['domestic']} VNĐ/kg
     - Thời tiết BMT: {market_data['weather']['temp']}°C, Mưa {market_data['weather']['rain']}mm
     """
 
-    print("🤖 [1/3] DeepSeek gốc đang lên phương án chiến lược...")
-    proposal_1 = call_deepseek_native(f"Dữ liệu thị trường tháng 10/2026:\n{data_summary}\n\nBạn là Chuyên gia Thực chiến. Đề xuất tỷ lệ Bán tiền tươi (Spot), Bán giao xa (Forward) và Giữ lại kho (100-500 tấn) bám sát bối cảnh thị trường hiện tại.")
+    prompt = f"""
+    DỮ LIỆU THỊ TRƯỜNG THÁNG 10/2026:
+    {data_summary}
 
-    print("🛡️ [2/3] Llama 3.3 đang soi rủi ro và phản biện...")
-    critique_2 = call_openrouter_paid("meta-llama/llama-3.3-70b-instruct", f"Dữ liệu:\n{data_summary}\n\nĐề xuất của DeepSeek:\n{proposal_1}\n\nBạn là Sĩ quan Quản trị Rủi ro. Vạch rõ điểm yếu kỹ thuật MA20/RSI, thách thức nguồn cung hiện tại và thắt chặt vạch đỏ cắt lỗ.")
+    Bạn là Chuyên gia Chiến lược Kho hàng Nông sản Đắk Lắk (quy mô lớn 100-500 tấn). 
+    Hãy đưa ra bản lệnh điều hành SÚC TÍCH, SẮC LẠNH, ĐỘC LẬP và RÕ RÀNG bằng tiếng Việt, tuân thủ đúng cấu trúc sau:
 
-    print("🏛️ [3/3] Gemini Flash chốt phán quyết chung cuộc...")
-    final_report = call_openrouter_paid("google/gemini-2.5-flash", f"""
-    HÔM NAY LÀ: {current_date_str}
-    DỮ LIỆU THỊ TRƯỜNG: {data_summary}
-    ĐỀ XUẤT THỰC CHIẾN (DEEPSEEK): {proposal_1}
-    PHẢN BIỆN RỦI RO (LLAMA): {critique_2}
+    🌍 **1. NHẬN ĐỊNH THỊ TRƯỜNG ({current_date_str})**
+    - Đánh giá nhanh thế trận giá xô nội địa và xu hướng kỹ thuật London (MA20/RSI).
 
-    Bạn là Chủ tịch Hội đồng Chiến lược Kho hàng Đắk Lắk. Hãy tổng hợp cuộc tranh luận trên thành BẢN LỆNH GIAO DỊCH SÚC TÍCH, SẮC LẠNH, chuẩn hóa theo thời điểm tháng 10/2026:
+    💼 **2. KẾ HOẠCH PHÂN BỔ DÒNG TIỀN (Kho hàng lớn)**
+    - **SPOT (Tiền tươi)**: [% tỷ lệ] — [Khối lượng & luận điểm hành động]
+    - **FORWARD (Giao xa)**: [% tỷ lệ] — [Khối lượng & kỳ hạn]
+    - **GIỮ KHO**: [% tỷ lệ] — [Khối lượng & chiến thuật thủ thế]
 
-    🌍 **1. THẾ TRẬN THỊ TRƯỜNG ({current_date_str})**
-    - Vĩ mô & Nguồn cung: [Đánh giá thực tế tháng 10/2026]
-    - Kỹ thuật & Tâm lý Đắk Lắk: [Tổng hợp RSI/MA20 và giá xô nội địa]
-
-    💼 **2. KẾ HOẠCH DÒNG TIỀN (Kho 100-500 tấn)**
-    - **SPOT (Tiền tươi)**: [%] — [Khối lượng & lý do]
-    - **FORWARD (Giao xa)**: [%] — [Khối lượng & kỳ hạn]
-    - **GIỮ KHO**: [%] — [Khối lượng & chiến thuật phòng thủ]
-
-    🛡️ **3. VẠCH ĐỎ AN TOÀN**
-    - **Cắt lỗ khi**: [Ngưỡng giá London/RSI cụ thể]
-    - **Chốt lời tiếp**: [Mức giá mục tiêu tiếp theo]
+    🛡️ **3. VẠCH ĐỎ QUẢN TRỊ RỦI RO**
+    - **Điểm cắt lỗ/Xả hàng khẩn cấp**: [Mức giá cụ thể]
+    - **Điểm chốt lời tiếp theo**: [Mức giá mục tiêu]
 
     📌 **4. LỆNH ĐIỀU HÀNH CHỦ ĐẠO**
-    [Một câu hành động dứt khoát nhất cho chủ kho]
-    """)
-    return final_report
+    [Một câu mệnh lệnh tối cao, dứt khoát nhất cho chủ kho]
+    """
+
+    return call_deepseek_native(prompt)
 
 # ==========================================
 # 5. GỬI TELEGRAM
@@ -257,7 +224,7 @@ def send_telegram_report(photo_path, report_text):
 
     requests.post(
         f"https://api.telegram.org/bot{token}/sendMessage",
-        json={'chat_id': chat_id, 'text': f"🏛️ **BÁO CÁO HỘI ĐỒNG CHIẾN LƯỢC**\n\n{report_text}", 'parse_mode': 'Markdown'},
+        json={'chat_id': chat_id, 'text': f"🏛️ **BẢN LỆNH CHIẾN LƯỢC (DEEPSEEK DIRECT)**\n\n{report_text}", 'parse_mode': 'Markdown'},
         timeout=10
     )
 
@@ -274,9 +241,9 @@ if __name__ == "__main__":
     chart_file, _, ma20_val, rsi_val = generate_technical_chart(market_data['london']['price'])
     tech_indicators = {"ma20": ma20_val, "rsi": rsi_val}
     
-    print("🏛️ Khởi động Hội đồng AI tranh biện...")
-    final_decision = run_debate_council(market_data, tech_indicators)
+    print("🤖 DeepSeek đang phân tích và lập phương án chiến lược...")
+    strategy_report = get_deepseek_strategy(market_data, tech_indicators)
     
-    print("🚀 Gửi báo cáo về Telegram...")
-    send_telegram_report(chart_file, final_decision)
-    print("✅ Hoàn tất chu trình tự động!")
+    print("🚀 Gửi bản lệnh về Telegram...")
+    send_telegram_report(chart_file, strategy_report)
+    print("✅ Hoàn tất!")
