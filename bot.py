@@ -8,9 +8,10 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def get_robusta_data():
     try:
-        ticker = yf.Ticker("RC=F")
+        # Sử dụng mã RM=F chuẩn của Robusta Futures trên Yahoo Finance
+        ticker = yf.Ticker("RM=F")
         df = ticker.history(period="1mo")
-        if df.empty:
+        if df.empty or len(df) < 2:
             return None
         
         latest_price = df['Close'].iloc[-1]
@@ -38,7 +39,7 @@ def analyze_with_gemini(data):
     
     prompt = f"""
     Bạn là một chuyên gia phân tích thị trường cà phê Robusta. 
-    Dữ liệu giá sàn London (RC=F) mới nhất:
+    Dữ liệu giá sàn London (RM=F) mới nhất:
     - Giá đóng cửa gần nhất: {data['latest']} USD/tấn
     - Biến động: {data['change_pct']}%
     - Thấp nhất / Cao nhất phiên: {data['low']} - {data['high']} USD/tấn
@@ -72,10 +73,10 @@ if __name__ == "__main__":
     data = get_robusta_data()
     if data:
         analysis = analyze_with_gemini(data)
-        msg = f"📊 **BẢN TIN ROBUSTA LONDON (RC=F)**\n"
+        msg = f"📊 **BẢN TIN ROBUSTA LONDON (RM=F)**\n"
         msg += f"• Giá hiện tại: **{data['latest']} USD/tấn** ({data['change_pct']}%)\n"
         msg += f"• Biên độ: {data['low']} - {data['high']} USD\n\n"
         msg += f"🧠 **PHÂN TÍCH TỪ AI AGENT:**\n{analysis}"
         send_telegram(msg)
     else:
-        send_telegram("⚠️ Không thể cập nhật dữ liệu giá Robusta hôm nay.")
+        send_telegram("⚠️ Không thể cập nhật dữ liệu giá Robusta hôm nay do lỗi kết nối dữ liệu.")
