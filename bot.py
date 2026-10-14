@@ -109,18 +109,31 @@ def analyze_market_with_deepseek(market_data):
         return "⚠️ Lỗi: Chưa cấu hình DEEPSEEK_API_KEY"
 
     prompt = f"""
-    Bạn là Hội đồng Chiến lược Giao dịch Cà phê Robusta quy mô 100-500 tấn tại Đắk Lắk.
+    Bạn là Giám đốc Lượng hóa Rủi ro và Chiến lược Thương mại cho kho cà phê Robusta (100–500 tấn) tại Đắk Lắk.
     
     [DỮ LIỆU THỜI THỰC]
     - Sàn London (ICE): {market_data['london']['price']} USD/tấn (Biến động: {market_data['london']['change']}%)
-    - Giá xô nội địa Đắk Lắk: {market_data['domestic']} VNĐ/kg
+    - Giá xô Đắk Lắk: {market_data['domestic']} VNĐ/kg
     - Thời tiết Buôn Ma Thuột: {market_data['weather']['temp']}°C, Độ ẩm {market_data['weather']['humidity']}%, Mưa {market_data['weather']['rain']}mm
     
-    Yêu cầu xuất báo cáo theo định dạng Commercial Trading Plan (ngắn gọn, sắc bén, bảng markdown chuyên nghiệp):
-    1. XU HƯỚNG & TÂM LÝ (Bảng so sánh chỉ số, đọc vị thị trường).
-    2. KHUYẾN NGHỊ HÀNH ĐỘNG (Tỷ lệ phân bổ Spot vs Forward cụ thể).
-    3. NGƯỠNG RỦI RO (Stop-Loss, Take-Profit rõ ràng cho cả nội địa và London).
-    4. TÓM TẮT MỘT DÒNG.
+    Hãy lập BẢN LỆNH GIAO DỊCH CHUYÊN NGHIỆP nhưng BÌNH DÂN HÓA THUẬT NGỮ theo đúng cấu trúc sau:
+
+    🎯 **1. ĐỌC BÀI THỊ TRƯỜNG (Không dùng từ viết tắt/tiếng Anh)**
+    - Thế giới (Sàn London): [Nêu giá, xu hướng dòng tiền và ý nghĩa con số này]
+    - Trong nước (Đắk Lắk): [Tâm lý mua/bán của đại lý và nông dân, tình trạng nguồn cung]
+    - Chất lượng & Thời tiết: [Cảnh báo độ ẩm, nguy cơ mốc/sương mai nếu giữ kho lâu]
+
+    💼 **2. KẾ HOẠCH BÁN HÀNG & DÒNG TIỀN (Cho kho 100 - 500 tấn)**
+    - **BÁN TIỀN TƯƠI (Spot)**: [Tỷ lệ %] — [Nêu rõ lý do và mức giá cần chốt]
+    - **CHỐT GIÁ TRƯỚC (Forward/Giao xa)**: [Tỷ lệ %] — [Mức giá mục tiêu và điều kiện ký hợp đồng]
+    - **DỰ PHÒNG KHO (Giữ lại)**: [Tỷ lệ %] — [Mục đích giữ để làm gì]
+
+    🛡️ **3. VẠCH ĐỎ AN TOÀN (Kỷ luật quản trị rủi ro)**
+    - **Điểm xả hàng cắt lỗ**: [Giá xô rơi xuống mức nào thì bắt buộc phải xả sạch để bảo toàn vốn]
+    - **Điểm chốt lời ngắt đọt**: [Giá London/Nội địa chạm mức nào thì chốt nấc tiếp theo]
+    
+    📌 **4. LỆNH ĐIỀU HÀNH 1 DÒNG**
+    [Viết một câu hành động dứt khoát nhất cho chủ kho]
     """
 
     headers = {
